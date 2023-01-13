@@ -27,17 +27,24 @@ class MyApp extends StatelessWidget {
 
 class MyAppState extends ChangeNotifier {
   var current = WordPair.random();
+  GlobalKey? historyListKey;
+  var history = <WordPair>[];
+
   void getNext() {
+    history.insert(0, current);
+    var animatedList = historyListKey?.currentState as AnimatedListState?;
+    animatedList?.insertItem(0);
     current = WordPair.random();
     notifyListeners();
   }
 
   var favorites = <WordPair>{};
-  void toggleFavorites() {
-    if (favorites.contains(current)) {
-      favorites.remove(current);
+  void toggleFavorites([WordPair? wordpair]) {
+    wordpair = wordpair ?? current;
+    if (favorites.contains(wordpair)) {
+      favorites.remove(wordpair);
     } else {
-      favorites.add(current);
+      favorites.add(wordpair);
     }
     notifyListeners();
   }
@@ -109,13 +116,34 @@ class FavoritesPage extends StatelessWidget {
       );
     }
 
-    return ListView(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-            padding: const EdgeInsets.all(20),
-            child: Text('You have ' '${appState.favorites.length} favorites:')),
-        for (var word in appState.favorites)
-          ListTile(leading: Icon(Icons.favorite), title: Text(word.asLowerCase))
+          padding: const EdgeInsets.all(30),
+          child: Text('You have '
+              '${appState.favorites.length} favorites:'),
+        ),
+        Expanded(
+          child: GridView(
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 400, childAspectRatio: 400 / 80),
+            children: [
+              for (var word in appState.favorites)
+                ListTile(
+                    leading: IconButton(
+                        onPressed: () {
+                          appState.toggleFavorites(word);
+                        },
+                        icon: Icon(Icons.delete_outline),
+                        color: Theme.of(context).primaryColor),
+                    title: Text(
+                      word.asLowerCase,
+                      semanticsLabel: word.asPascalCase,
+                    ))
+            ],
+          ),
+        )
       ],
     );
   }
@@ -138,6 +166,13 @@ class GeneratorPage extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // Text('A random idea:'),
+          Expanded(
+            flex: 3,
+            child: HistroyView(),
+          ),
+          SizedBox(
+            height: 10,
+          ),
           BigCard(pair: pair),
           SizedBox(
             height: 10,
@@ -148,7 +183,6 @@ class GeneratorPage extends StatelessWidget {
               ElevatedButton.icon(
                   onPressed: () {
                     appState.toggleFavorites();
-                    print(appState.favorites);
                   },
                   icon: Icon(icon),
                   label: Text('Like')),
@@ -158,13 +192,71 @@ class GeneratorPage extends StatelessWidget {
               ElevatedButton(
                   onPressed: () {
                     appState.getNext();
+                    // appState.updateHistory();
                   },
                   child: Text('Next')),
             ],
+          ),
+          Spacer(
+            flex: 2,
           )
         ],
       ),
     );
+  }
+}
+
+class HistroyView extends StatefulWidget {
+  @override
+  State<HistroyView> createState() => _HistroyViewState();
+}
+
+class _HistroyViewState extends State<HistroyView> {
+  final _key = GlobalKey();
+
+  @override
+  Widget build(BuildContext context) {
+    var appState = context.watch<MyAppState>();
+    appState.historyListKey = _key;
+
+    return ShaderMask(
+        shaderCallback: (Rect bounds) {
+          return LinearGradient(
+            colors: [Colors.transparent, Colors.black],
+            stops: [0.0, 0.5],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ).createShader(bounds);
+        },
+        blendMode: BlendMode.dstIn,
+        child: AnimatedList(
+            key: _key,
+            reverse: true,
+            padding: EdgeInsets.only(top: 100),
+            initialItemCount: appState.history.length,
+            itemBuilder: ((context, index, animation) {
+              final wordpair = appState.history[index];
+              return SizeTransition(
+                  sizeFactor: animation,
+                  child: Center(
+                      child: TextButton.icon(
+                          onPressed: () {
+                            appState.toggleFavorites(wordpair);
+                          },
+                          icon: appState.favorites.contains(wordpair)
+                              ? AnimatedAlign(
+                                  alignment: Alignment.centerLeft,
+                                  duration: const Duration(seconds: 2),
+                                  child: Icon(
+                                    Icons.favorite,
+                                    size: 12,
+                                  ))
+                              : SizedBox(),
+                          label: Text(
+                            wordpair.asLowerCase,
+                            semanticsLabel: wordpair.asPascalCase,
+                          ))));
+            })));
   }
 }
 
